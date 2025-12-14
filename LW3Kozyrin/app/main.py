@@ -5,26 +5,25 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from app.controllers.user_controller import UserController
 from app.repositories.user_repository import UserRepository
 from app.services.user_service import UserService
-from app.models.user import Base
-
+from app.models.base import Base
 
 # Настройка базы данных
 DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
+    "DATABASE_URL",
     "postgresql+asyncpg://postgres:viking676@localhost:5432/litestar_db"
 )
 
 # Создание асинхронного движка
 engine = create_async_engine(
-    DATABASE_URL, 
+    DATABASE_URL,
     echo=True,  # Логирование SQL-запросов
     future=True
 )
 
 # Создание фабрики сессий
 async_session_factory = async_sessionmaker(
-    engine, 
-    class_=AsyncSession, 
+    engine,
+    class_=AsyncSession,
     expire_on_commit=False
 )
 
@@ -32,10 +31,10 @@ async_session_factory = async_sessionmaker(
 async def provide_db_session() -> AsyncSession:
     """
     Провайдер сессии базы данных
-    
+
     Создает новую сессию для каждого запроса и автоматически закрывает её
     после завершения обработки запроса
-    
+
     Yields:
         AsyncSession: Сессия базы данных
     """
@@ -49,30 +48,27 @@ async def provide_db_session() -> AsyncSession:
             await session.close()
 
 
-async def provide_user_repository(db_session: AsyncSession) -> UserRepository:
+def provide_user_repository() -> UserRepository:
     """
     Провайдер репозитория пользователей
-    
-    Args:
-        db_session: Сессия базы данных
-        
+
     Returns:
         UserRepository: Экземпляр репозитория пользователей
     """
     return UserRepository()
 
 
-async def provide_user_service(
-    user_repository: UserRepository,
-    db_session: AsyncSession
+def provide_user_service(
+        user_repository: UserRepository,
+        db_session: AsyncSession
 ) -> UserService:
     """
     Провайдер сервиса пользователей
-    
+
     Args:
         user_repository: Репозиторий пользователей
         db_session: Сессия базы данных
-        
+
     Returns:
         UserService: Экземпляр сервиса пользователей
     """
@@ -82,7 +78,7 @@ async def provide_user_service(
 async def init_database() -> None:
     """
     Инициализация базы данных
-    
+
     Создает все таблицы, определенные в моделях
     """
     async with engine.begin() as conn:
@@ -94,13 +90,13 @@ app = Litestar(
     route_handlers=[UserController],
     dependencies={
         "db_session": Provide(provide_db_session),
-        "user_repository": Provide(provide_user_repository),
-        "user_service": Provide(provide_user_service),
+        "user_repository": Provide(provide_user_repository, sync_to_thread=False),
+        "user_service": Provide(provide_user_service, sync_to_thread=False),
     },
     on_startup=[init_database],  # Инициализация БД при старте приложения
 )
 
-
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

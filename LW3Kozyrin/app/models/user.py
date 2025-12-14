@@ -1,8 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
 from datetime import datetime
-
-Base = declarative_base()
+from app.models.base import Base
 
 class User(Base):
     """Модель пользователя для базы данных"""
@@ -14,6 +13,9 @@ class User(Base):
     full_name = Column(String(100), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    addresses = relationship("Address", back_populates="user", cascade="all, delete-orphan")
+    orders = relationship("Order", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', email='{self.email}')>"

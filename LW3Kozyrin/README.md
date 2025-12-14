@@ -1,29 +1,10 @@
-# Лабораторная работа 3: Внедрение Dependency Injection и SQLAlchemy в Litestar
+# Лабораторная работа №4: Тестирование бэкенд приложения
 
 ## Описание
 
-Реализация CRUD API для управления пользователями с использованием:
-- **Litestar** - современный асинхронный веб-фреймворк
-- **SQLAlchemy** - ORM для работы с базой данных
-- **Dependency Injection** - паттерн для управления зависимостями
-- **Трехслойная архитектура** - разделение на Controller, Service, Repository
+Проект на основе Litestar (FastAPI-подобный фреймворк) с SQLAlchemy для работы с базой данных.
+Реализовано полное тестирование приложения: репозитории, сервисы, API endpoints.
 
-## Структура проекта
-
-\`\`\`
-app/
-├── controllers/
-│   └── user_controller.py    # HTTP endpoints
-├── services/
-│   └── user_service.py        # Бизнес-логика
-├── repositories/
-│   └── user_repository.py     # Работа с БД
-├── models/
-│   └── user.py                # SQLAlchemy модели
-├── schemas/
-│   └── user_schema.py         # Pydantic схемы
-└── main.py                    # Точка входа приложения
-\`\`\`
 
 ## Установка и запуск
 
@@ -33,175 +14,346 @@ app/
 pip install -r requirements.txt
 \`\`\`
 
-### 2. Настройка базы данных PostgreSQL
+### 2. Настройка переменных окружения
 
-Установите PostgreSQL и создайте базу данных:
+Создайте `.env` файл:
 
-\`\`\`bash
-# Подключитесь к PostgreSQL
-psql -U postgres
-
-# Создайте базу данных
-CREATE DATABASE litestar_db;
-
-# Создайте пользователя
-CREATE USER user WITH PASSWORD 'password';
-
-# Предоставьте права
-GRANT ALL PRIVILEGES ON DATABASE litestar_db TO user;
+\`\`\`env
+DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/litestar_db
 \`\`\`
 
-### 3. Настройка переменных окружения
-
-Скопируйте `.env.example` в `.env` и измените параметры подключения:
-
-\`\`\`bash
-cp .env.example .env
-\`\`\`
-
-Отредактируйте `.env`:
-\`\`\`
-DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/litestar_db
-\`\`\`
-
-### 4. Запуск приложения
+### 3. Запуск приложения
 
 \`\`\`bash
 python app/main.py
 \`\`\`
 
-Или с помощью uvicorn:
+Приложение будет доступно по адресу: `http://localhost:8000`
+
+## Тестирование
+
+### Запуск всех тестов
 
 \`\`\`bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+pytest
 \`\`\`
 
-## Использование API
-
-### Документация API
-
-После запуска приложения документация доступна по адресу:
-- Swagger UI: http://localhost:8000/schema/swagger
-- OpenAPI Schema: http://localhost:8000/schema/openapi.json
-
-### Примеры запросов
-
-#### 1. Создать пользователя (POST /users)
+### Запуск только unit-тестов
 
 \`\`\`bash
-curl -X POST http://localhost:8000/users \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "johndoe",
-    "email": "john.doe@example.com",
-    "full_name": "John Doe"
-  }'
+pytest tests/test_repositories/ tests/test_services/
 \`\`\`
 
-#### 2. Получить пользователя по ID (GET /users/{user_id})
+### Запуск только API тестов
 
 \`\`\`bash
-curl http://localhost:8000/users/1
+pytest tests/test_routes/
 \`\`\`
 
-#### 3. Получить список пользователей с пагинацией (GET /users)
+### Запуск с покрытием кода
 
 \`\`\`bash
-# Получить первые 10 пользователей (страница 1)
-curl "http://localhost:8000/users?count=10&page=1"
-
-# Получить следующие 10 пользователей (страница 2)
-curl "http://localhost:8000/users?count=10&page=2"
+pytest --cov=app --cov-report=html
 \`\`\`
 
-#### 4. Обновить пользователя (PUT /users/{user_id})
+После выполнения откройте `htmlcov/index.html` в браузере для просмотра отчета.
+
+### Параллельный запуск тестов
 
 \`\`\`bash
-curl -X PUT http://localhost:8000/users/1 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "john.updated@example.com",
-    "full_name": "John Updated"
-  }'
+pytest -n auto
 \`\`\`
 
-#### 5. Удалить пользователя (DELETE /users/{user_id})
+## Особенности реализации
+
+### 1. Pytest Fixtures (Фикстуры)
+
+**Что это**: Переиспользуемые объекты для подготовки тестовой среды.
+
+**Реализованные фикстуры** (в `tests/conftest.py`):
+
+- `engine` - создает in-memory SQLite БД для каждого теста
+- `test_session` - предоставляет изолированную сессию БД
+- `user_repository`, `product_repository`, и т.д. - репозитории
+
+**Преимущества**:
+- Каждый тест получает чистую БД
+- Автоматическая очистка после теста
+- Изоляция тестов друг от друга
+
+### 2. Модели с поддержкой нескольких продуктов в заказе
+
+**Промежуточная модель `OrderItem`**:
+\`\`\`python
+class OrderItem(Base):
+    id = Column(Integer, primary_key=True)
+    order_id = Column(Integer, ForeignKey('orders.id'))
+    product_id = Column(Integer, ForeignKey('products.id'))
+    quantity = Column(Integer)  # Количество товара
+    price_at_purchase = Column(Float)  # Цена на момент покупки
+\`\`\`
+
+**Модель `Product` с количеством на складе**:
+\`\`\`python
+class Product(Base):
+    stock_quantity = Column(Integer, default=0)  # Количество на складе
+\`\`\`
+
+### 3. Тестирование репозиториев
+
+Проверяются все CRUD операции:
+- Создание (Create)
+- Чтение (Read) - по ID, списком, с фильтрацией
+- Обновление (Update)
+- Удаление (Delete)
+
+### 4. Тестирование сервисов с Mock
+
+**Mock объекты** позволяют тестировать сервисный слой изолированно:
+
+\`\`\`python
+@pytest.fixture
+def mock_user_repository():
+    return AsyncMock()
+
+mock_user_repository.create.return_value = mock_user
+\`\`\`
+
+**Преимущества**:
+- Не требуется реальная БД
+- Тесты выполняются быстрее
+- Проверяется только бизнес-логика
+
+### 5. Тестирование API endpoints
+
+Используется `AsyncTestClient` от Litestar:
+
+\`\`\`python
+async with AsyncTestClient(app=test_app) as client:
+    response = await client.post("/users", json={...})
+    assert response.status_code == 201
+\`\`\`
+
+Проверяются:
+- HTTP статус-коды
+- Валидация данных
+- Корректность ответов
+
+### 6. Edge Cases (Граничные случаи)
+
+Тесты для нестандартных ситуаций:
+
+- ❌ Заказ с нулевым/отрицательным количеством
+- ❌ Заказ несуществующего продукта
+- ❌ Пустой список товаров в заказе
+- ⚠️ Заказ товара больше, чем на складе
+- ✅ Очень большое количество товара
+- ✅ Один продукт несколько раз в заказе
+
+### 7. Изоляция тестов
+
+**Как обеспечивается**:
+
+1. **In-memory SQLite** - каждый тест использует свою БД в памяти
+2. **Scope="function"** - фикстуры пересоздаются для каждого теста
+3. **Автоматический rollback** - откат транзакций после теста
+4. **Параллельное выполнение** - каждый процесс имеет свою среду
+
+## Ответы на вопросы
+
+### 1. Почему используем отдельную тестовую БД?
+
+**Ответ**: 
+
+- **Изоляция**: Тесты не влияют на реальные данные
+- **Скорость**: In-memory БД быстрее дисковых
+- **Чистота**: Каждый тест начинается с пустой БД
+- **Безопасность**: Нельзя случайно удалить production данные
+
+**Проблемы при использовании production БД**:
+- Удаление реальных данных пользователей
+- Конфликты при параллельном запуске тестов
+- Медленное выполнение
+- Невозможность тестировать деструктивные операции
+
+### 2. Как работает TestClient в Litestar?
+
+**Ответ**:
+
+`TestClient` создает виртуальное HTTP окружение без запуска реального сервера:
+
+\`\`\`python
+async with AsyncTestClient(app=test_app) as client:
+    response = await client.post("/users", json={...})
+\`\`\`
+
+**Преимущества**:
+- Не нужно запускать сервер
+- Быстрое выполнение запросов
+- Доступ к внутреннему состоянию приложения
+- Автоматическая обработка async/await
+
+### 3. Edge cases для сервиса заказов
+
+**Ответ**: Реализованы тесты в `test_order_edge_cases.py`:
+
+1. Заказ с нулевым/отрицательным количеством
+2. Заказ несуществующего продукта
+3. Пустой список товаров
+4. Количество превышает запасы на складе
+5. Несуществующий пользователь/адрес
+6. Очень большое количество товара
+7. Дублирование продуктов в заказе
+
+### 4. Тестирование отправки email при смене статуса на "shipped"
+
+**Ответ**:
+
+\`\`\`python
+from unittest.mock import AsyncMock, patch
+
+@pytest.mark.asyncio
+async def test_order_shipped_sends_email(order_service, mock_order_repository):
+    """
+    Тест отправки email при смене статуса на shipped
+    """
+    # Mock email сервиса
+    with patch('app.services.email_service.send_email') as mock_send_email:
+        mock_send_email.return_value = AsyncMock()
+        
+        # Меняем статус на shipped
+        order_data = OrderUpdate(status=OrderStatus.SHIPPED)
+        await order_service.update_order_status(1, order_data)
+        
+        # Проверяем, что email был отправлен
+        mock_send_email.assert_called_once()
+        args = mock_send_email.call_args
+        assert "shipped" in args[0].lower()
+\`\`\`
+
+**Ключевые моменты**:
+- Используем `patch` для замены реального email сервиса
+- Проверяем факт вызова функции отправки
+- Проверяем параметры вызова (получатель, тема, содержимое)
+
+### 5. Тест для проверки пагинации товаров
+
+**Ответ**: Реализован в `test_pagination.py`
+
+**Проверяемые параметры**:
+
+\`\`\`python
+@pytest.mark.asyncio
+async def test_product_pagination_parameters(test_session, product_repository):
+    # 1. count - количество элементов на странице
+    products_page1 = await product_repository.get_by_filter(
+        test_session, count=5, page=1
+    )
+    assert len(products_page1) == 5
+    
+    # 2. page - номер страницы (начиная с 1)
+    products_page2 = await product_repository.get_by_filter(
+        test_session, count=5, page=2
+    )
+    assert products_page2[0].id != products_page1[0].id
+    
+    # 3. total_count - общее количество записей
+    total = await product_repository.get_total_count(test_session)
+    assert total == 15
+    
+    # 4. Последняя страница с неполным набором
+    last_page = await product_repository.get_by_filter(
+        test_session, count=5, page=3
+    )
+    assert len(last_page) < 5
+    
+    # 5. Страница за пределами данных - пустая
+    empty_page = await product_repository.get_by_filter(
+        test_session, count=5, page=100
+    )
+    assert len(empty_page) == 0
+\`\`\`
+
+### 6. Изоляция тестов и её важность
+
+**Ответ**:
+
+**Как обеспечивается**:
+
+1. **Фикстуры с scope="function"**:
+   \`\`\`python
+   @pytest_asyncio.fixture(scope="function")
+   async def test_session(engine):
+       # Новая сессия для каждого теста
+   \`\`\`
+
+2. **In-memory база данных**:
+   \`\`\`python
+   engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+   \`\`\`
+
+3. **Автоматическая очистка**:
+   \`\`\`python
+   yield session
+   await session.rollback()  # Откат изменений
+   await session.close()
+   \`\`\`
+
+4. **Пересоздание схемы**:
+   \`\`\`python
+   async with engine.begin() as conn:
+       await conn.run_sync(Base.metadata.drop_all)
+       await conn.run_sync(Base.metadata.create_all)
+   \`\`\`
+
+**Почему это важно**:
+
+- **Независимость**: Результат теста не зависит от других тестов
+- **Повторяемость**: Тесты дают одинаковый результат при каждом запуске
+- **Отладка**: Легче найти причину падения теста
+- **Параллелизм**: Можно запускать тесты параллельно (pytest -n auto)
+- **Надежность**: Нет race conditions и конфликтов данных
+
+**Демонстрация изоляции**:
+\`\`\`python
+# test_isolation.py показывает, что каждый тест
+# видит только свои данные, независимо от порядка выполнения
+\`\`\`
+
+## Команды для проверки
 
 \`\`\`bash
-curl -X DELETE http://localhost:8000/users/1
+# Все тесты
+pytest -v
+
+# Unit-тесты репозиториев
+pytest tests/test_repositories/ -v
+
+# Тесты сервисов с mock
+pytest tests/test_services/ -v
+
+# Интеграционные тесты API
+pytest tests/test_routes/ -v
+
+# Edge cases
+pytest tests/test_edge_cases/ -v
+
+# С покрытием кода
+pytest --cov=app --cov-report=term-missing
+
+# Параллельное выполнение
+pytest -n 4
+
+# Конкретный тест
+pytest tests/test_repositories/test_user_repository.py::test_create_user -v
 \`\`\`
 
-## Работа с Git
+## Автор
 
-### Создание тега для лабораторной работы 2
+Лабораторная работа №4 по курсу Разработки приложений Козырина Д.А.
 
-Перед началом работы создайте тег для предыдущей лабораторной:
+## Теги Git
 
 \`\`\`bash
-git tag lab_2
-git push origin lab_2
-\`\`\`
-
-### Завершение лабораторной работы 3
-
-После завершения работы создайте тег:
-
-\`\`\`bash
-git add .
-git commit -m "Completed lab 3: Dependency Injection and SQLAlchemy"
-git tag lab_3
-git push origin main
-git push origin lab_3
-\`\`\`
-
-## Архитектура приложения
-
-### Трехслойная архитектура
-
-1. **Controller (Контроллер)** - `user_controller.py`
-   - Обрабатывает HTTP-запросы
-   - Валидирует входные данные
-   - Возвращает HTTP-ответы
-
-2. **Service (Сервис)** - `user_service.py`
-   - Содержит бизнес-логику
-   - Координирует работу репозиториев
-   - Может интегрироваться с внешними системами
-
-3. **Repository (Репозиторий)** - `user_repository.py`
-   - Работает с базой данных
-   - Выполняет CRUD операции
-   - Изолирует логику работы с БД
-
-### Dependency Injection
-
-Приложение использует встроенный DI контейнер Litestar:
-
-- `provide_db_session()` - создает сессию БД для каждого запроса
-- `provide_user_repository()` - создает экземпляр репозитория
-- `provide_user_service()` - создает экземпляр сервиса с зависимостями
-
-### Жизненный цикл запроса
-
-1. Приходит HTTP-запрос
-2. Litestar создает сессию БД через `provide_db_session()`
-3. Создается репозиторий через `provide_user_repository()`
-4. Создается сервис через `provide_user_service()`
-5. Контроллер обрабатывает запрос
-6. Сессия БД автоматически закрывается
-
-## Задание со звездочкой ⭐
-
-Реализовано в методе `get_all_users()`:
-- Возвращает не только список пользователей, но и общее количество
-- Используется схема `UserListResponse` с полями `users` и `total_count`
-- Помогает реализовать пагинацию на клиенте
-
-## HTTP статусы
-
-- **200 OK** - Успешный GET/PUT
-- **201 Created** - Успешный POST (создание)
-- **204 No Content** - Успешный DELETE
-- **400 Bad Request** - Невалидные данные
-- **404 Not Found** - Ресурс не найден
-- **500 Internal Server Error** - Ошибка сервера
+git tag lab_4
+git push origin lab_4

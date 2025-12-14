@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from datetime import datetime
 from typing import Optional
 
@@ -8,14 +8,15 @@ class UserCreate(BaseModel):
     email: EmailStr = Field(..., description="Email пользователя")
     full_name: Optional[str] = Field(None, max_length=100, description="Полное имя")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "username": "johndoe",
                 "email": "john.doe@example.com",
                 "full_name": "John Doe"
             }
         }
+    )
 
 
 class UserUpdate(BaseModel):
@@ -24,14 +25,15 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     full_name: Optional[str] = Field(None, max_length=100)
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "username": "johndoe_updated",
                 "email": "john.updated@example.com",
                 "full_name": "John Doe Updated"
             }
         }
+    )
 
 
 class UserResponse(BaseModel):
@@ -43,8 +45,7 @@ class UserResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserListResponse(BaseModel):
@@ -52,8 +53,8 @@ class UserListResponse(BaseModel):
     users: list[UserResponse]
     total_count: int = Field(..., description="Общее количество пользователей в базе данных")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "users": [
                     {
@@ -68,3 +69,4 @@ class UserListResponse(BaseModel):
                 "total_count": 10
             }
         }
+    )

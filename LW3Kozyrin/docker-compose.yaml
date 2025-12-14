@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # База данных PostgreSQL
   db:
-    image: postgres:17-alpine
+    image: postgres:15-alpine
     container_name: litestar_postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -12,10 +12,29 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      # Постоянное хранилище данных
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - litestar_network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: litestar_rabbitmq
+    ports:
+      - "5672:5672"   # AMQP порт
+      - "15672:15672" # Management UI порт
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS:-guest}
+      - RABBITMQ_DEFAULT_VHOST=local
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -31,28 +50,31 @@ services:
     environment:
       # Переменные окружения для подключения к БД
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-litestar_db}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672/local
       HOST: 0.0.0.0
       PORT: 8000
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       - "8000:8000"
     volumes:
-      # Монтируем код для hot-reload при разработке
       - ./app:/app/app
       - ./tests:/app/tests
+      - ./scripts:/app/scripts
     depends_on:
       db:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     networks:
       - litestar_network
     restart: unless-stopped
 
-# Том для хранения данных PostgreSQL
 volumes:
   postgres_data:
     driver: local
+  rabbitmq_data:
+    driver: local
 
-# Сеть для связи между контейнерами
 networks:
   litestar_network:
     driver: bridge

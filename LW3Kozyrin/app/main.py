@@ -10,6 +10,7 @@ from app.repositories.product_repository import ProductRepository
 from app.repositories.order_repository import OrderRepository
 from app.services.user_service import UserService
 from app.models.base import Base
+from app.cache.redis_client import redis_client
 
 
 # Настройка базы данных
@@ -74,6 +75,18 @@ async def init_database() -> None:
         await conn.run_sync(Base.metadata.create_all)
 
 
+async def init_redis() -> None:
+    """Инициализация Redis при запуске приложения"""
+    await redis_client.connect()
+    print("✓ Redis успешно подключен")
+
+
+async def close_redis() -> None:
+    """Закрытие подключения к Redis при остановке приложения"""
+    await redis_client.disconnect()
+    print("✓ Redis отключен")
+
+
 # Создание приложения Litestar
 app = Litestar(
     route_handlers=[UserController, ProductController, OrderController],
@@ -84,7 +97,8 @@ app = Litestar(
         "order_repository": Provide(provide_order_repository, sync_to_thread=False),
         "user_service": Provide(provide_user_service, sync_to_thread=False),
     },
-    on_startup=[init_database],
+    on_startup=[init_database, init_redis],
+    on_shutdown=[close_redis],
 )
 
 

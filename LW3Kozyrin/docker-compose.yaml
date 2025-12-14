@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # База данных PostgreSQL
+  db:
+    image: postgres:17-alpine
+    container_name: litestar_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-litestar_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      # Постоянное хранилище данных
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - litestar_network
+
+  # Основное приложение
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: litestar_app
+    environment:
+      # Переменные окружения для подключения к БД
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-litestar_db}
+      HOST: 0.0.0.0
+      PORT: 8000
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "8000:8000"
+    volumes:
+      # Монтируем код для hot-reload при разработке
+      - ./app:/app/app
+      - ./tests:/app/tests
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - litestar_network
+    restart: unless-stopped
+
+# Том для хранения данных PostgreSQL
+volumes:
+  postgres_data:
+    driver: local
+
+# Сеть для связи между контейнерами
+networks:
+  litestar_network:
+    driver: bridge

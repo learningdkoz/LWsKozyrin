@@ -1,0 +1,43 @@
+# Конфигурация pre-commit hooks для автоматической проверки кода перед коммитом
+repos:
+  # Black - автоформатирование Python кода
+  - repo: https://github.com/psf/black
+    rev: 24.1.1
+    hooks:
+      - id: black
+        language_version: python3.11
+        args: ['--config', 'pyproject.toml']
+        # Проверяем только Python файлы в app и tests
+        files: ^(app|tests)/.*\.py$
+
+  # isort - сортировка импортов
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: ['--settings-path', 'pyproject.toml']
+        files: ^(app|tests)/.*\.py$
+
+  # Pylint - линтер для проверки качества кода
+  - repo: https://github.com/PyCQA/pylint
+    rev: v3.0.3
+    hooks:
+      - id: pylint
+        args: ['--rcfile=.pylintrc']
+        files: ^(app|tests)/.*\.py$
+        additional_dependencies:
+          - litestar>=2.0.0
+          - sqlalchemy>=2.0.0
+          - pydantic>=2.0.0
+
+  # Trailing whitespace - удаление пробелов в конце строк
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        files: ^(app|tests)/.*\.py$
+      - id: end-of-file-fixer
+        files: ^(app|tests)/.*\.py$
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']

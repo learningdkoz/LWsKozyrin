@@ -1,0 +1,74 @@
+[MASTER]
+# Настройка путей для правильного разрешения импортов
+init-hook='import sys; sys.path.append(".")'
+
+# Игнорируемые паттерны файлов
+ignore-patterns=^\.#,migrations,venv,env,node_modules,__pycache__
+
+# Расширения для C-пакетов
+extension-pkg-whitelist=pydantic
+
+[MESSAGES CONTROL]
+# Отключаем некоторые проверки, которые не критичны для проекта
+disable=
+    # Документация
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+    # Импорты
+    import-error,
+    no-name-in-module,
+    # Именование
+    invalid-name,
+    # Другое
+    too-few-public-methods,
+    too-many-arguments,
+    too-many-instance-attributes,
+    too-many-locals,
+    duplicate-code,
+    fixme,
+    protected-access,
+    broad-exception-caught,
+    unused-argument,
+    redefined-outer-name
+
+[BASIC]
+# Хорошие имена переменных
+good-names=i,j,k,ex,_,id,db
+
+# Регулярные выражения для имен
+argument-rgx=[a-z_][a-z0-9_]{2,30}$
+variable-rgx=[a-z_][a-z0-9_]{2,30}$
+const-rgx=(([A-Z_][A-Z0-9_]*)|(__.*__))$
+
+[FORMAT]
+# Максимальная длина строки
+max-line-length=120
+
+# Максимальное количество строк в модуле
+max-module-lines=1000
+
+[DESIGN]
+# Максимальное количество атрибутов
+max-attributes=10
+
+[TYPECHECK]
+# Динамически генерируемые члены (для SQLAlchemy и других ORM)
+generated-members=query.*,Query.*,session.*
+
+[SIMILARITIES]
+# Минимальное количество строк для определения дубликата
+min-similarity-lines=4
+
+[IMPORTS]
+# Игнорируемые пути для импортов
+ignored-modules=
+
+[PATHS]
+# Игнорируемые пути
+ignore-paths=
+    ^tests/.*$,
+    ^migrations/.*$,
+    ^venv/.*$,
+    ^env/.*$,
+    ^node_modules/.*$

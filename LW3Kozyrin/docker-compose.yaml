@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # База данных PostgreSQL
   db:
-    image: postgres:15-alpine
+    image: postgres:17-alpine
     container_name: litestar_postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -13,6 +13,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/migrations:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -64,7 +65,6 @@ services:
       dockerfile: Dockerfile
     container_name: litestar_app
     environment:
-      # Переменные окружения для подключения к БД
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-litestar_db}
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672/local
       REDIS_URL: redis://redis:6379/0
@@ -87,6 +87,50 @@ services:
     networks:
       - litestar_network
     restart: unless-stopped
+
+  taskiq-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: litestar_taskiq_worker
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-litestar_db}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672/local
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - litestar_network
+    restart: unless-stopped
+    command: ["taskiq", "worker", "app.scheduler.taskiq_app:broker", "--fs-discover", "--log-level", "INFO"]
+
+  taskiq-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: litestar_taskiq_scheduler
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-litestar_db}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672/local
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - litestar_network
+    restart: unless-stopped
+    command: ["taskiq", "scheduler", "app.scheduler.taskiq_app:scheduler", "--log-level", "INFO"]
 
 volumes:
   postgres_data:

@@ -5,9 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from app.controllers.user_controller import UserController
 from app.controllers.product_controller import ProductController
 from app.controllers.order_controller import OrderController
+from app.controllers.report_controller import ReportController
 from app.repositories.user_repository import UserRepository
 from app.repositories.product_repository import ProductRepository
 from app.repositories.order_repository import OrderRepository
+from app.repositories.report_repository import ReportRepository
 from app.services.user_service import UserService
 from app.models.base import Base
 from app.cache.redis_client import redis_client
@@ -61,12 +63,18 @@ def provide_order_repository() -> OrderRepository:
     return OrderRepository()
 
 
+def provide_report_repository() -> ReportRepository:
+    """Провайдер репозитория отчетов"""
+    return ReportRepository()
+
+
 def provide_user_service(
     user_repository: UserRepository,
     db_session: AsyncSession
 ) -> UserService:
     """Провайдер сервиса пользователей"""
     return UserService(user_repository, db_session)
+
 
 
 async def init_database() -> None:
@@ -89,12 +97,13 @@ async def close_redis() -> None:
 
 # Создание приложения Litestar
 app = Litestar(
-    route_handlers=[UserController, ProductController, OrderController],
+    route_handlers=[UserController, ProductController, OrderController, ReportController],
     dependencies={
         "db_session": Provide(provide_db_session),
         "user_repository": Provide(provide_user_repository, sync_to_thread=False),
         "product_repository": Provide(provide_product_repository, sync_to_thread=False),
         "order_repository": Provide(provide_order_repository, sync_to_thread=False),
+        "report_repository": Provide(provide_report_repository, sync_to_thread=False),
         "user_service": Provide(provide_user_service, sync_to_thread=False),
     },
     on_startup=[init_database, init_redis],

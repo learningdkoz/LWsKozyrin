@@ -197,6 +197,194 @@
 3. **Автоматический rollback** - откат транзакций после теста
 4. **Параллельное выполнение** - каждый процесс имеет свою среду
 
+
+### Ход выполнения
+1. Подготовка тестового окружения
+
+Для тестирования была настроена отдельная тестовая база данных SQLite in-memory. Это позволило запускать тесты быстро и изолированно, не затрагивая основную базу данных проекта.
+
+Были созданы pytest-фикстуры для:
+
+-инициализации тестовой базы данных
+-подключения репозиториев
+-очистки данных после выполнения тестов
+
+Пример фикстуры создания движка: 
+
+    @pytest_asyncio.fixture(scope="function")
+    async def engine():
+        """
+        Фикстура для создания тестового движка базы данных
+    
+        Использует SQLite in-memory для изоляции тестов и быстрой работы.
+        Каждый тест получает чистую базу данных.
+    
+        Yields:
+            AsyncEngine: Асинхронный движок базы данных
+        """
+        # Создаем in-memory SQLite БД для тестов
+        engine = create_async_engine(
+            "sqlite+aiosqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+            echo=False  # Отключаем логирование SQL для чистоты вывода тестов
+        )
+    
+        # Создаем все таблицы
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    
+        yield engine
+    
+        # Очищаем после теста
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+        await engine.dispose()
+
+Фикстуры использовались с областью видимости function, чтобы каждый тест запускался в чистом окружении.
+
+2. Тестирование репозиториев
+
+<img width="1685" height="475" alt="Снимок экрана 2025-12-16 в 04 57 41" src="https://github.com/user-attachments/assets/d553b6e1-94be-4630-8867-c210382beb2d" />
+
+На первом этапе были написаны тесты для репозитория пользователей:
+
+-создание пользователя
+-получение пользователя по id
+-обновление данных пользователя
+–удаление пользователя
+–получение списка пользователей
+
+Пример тестирования корректного создания пользователя:
+
+    @pytest.mark.asyncio
+    async def test_create_user(test_session, user_repository):
+    """
+    Тест создания пользователя в базе данных
+    
+    Проверяет, что:
+    - Пользователь успешно создается
+    - Все поля корректно сохраняются
+    - Генерируется уникальный ID
+    """
+    # Подготовка данных для создания пользователя
+    user_data = UserCreate(
+        username="testuser",
+        email="test@example.com",
+        full_name="Test User"
+    )
+    
+    # Создаем пользователя
+    user = await user_repository.create(test_session, user_data)
+    
+    # Проверяем результат
+    assert user.id is not None, "ID пользователя должен быть сгенерирован"
+    assert user.username == "testuser", "Username должен совпадать"
+    assert user.email == "test@example.com", "Email должен совпадать"
+    assert user.full_name == "Test User", "Full name должно совпадать"
+    assert user.created_at is not None, "Дата создания должна быть установлена"
+    assert user.updated_at is not None, "Дата обновления должна быть установлена"
+
+Далее аналогичные тесты были реализованы для репозиториев продукции и заказов. При тестировании заказов учитывался случай, когда в одном заказе может быть несколько продуктов.
+Также была проверена корректность работы с количеством товара на складе.
+
+3. Тестирование сервисного слоя
+
+<img width="1683" height="269" alt="Снимок экрана 2025-12-16 в 04 58 24" src="https://github.com/user-attachments/assets/bb32817b-9c87-4250-8a12-4af170505188" />
+
+Для тестирования сервисного слоя использовались mock-объекты. Это позволило проверить бизнес-логику сервисов без реального взаимодействия с базой данных.
+
+С помощью mock:
+
+-подменялись репозитории
+
+-проверялись сценарии успешного выполнения операций
+–тестировалась обработка ошибок
+
+Пример получения пользователя по идентификатора:
+
+    @pytest.mark.asyncio
+    async def test_get_user_by_id_service(user_service, mock_user_repository, mock_session):
+    """
+    Тест получения пользователя по ID через сервис
+    
+    Проверяет, что сервис корректно вызывает репозиторий
+    """
+    # Mock пользователь
+    mock_user = User(
+        id=1,
+        username="testuser",
+        email="test@example.com",
+        full_name="Test User",
+        created_at=datetime.now(),
+        updated_at=datetime.now()
+    )
+    
+    # Настраиваем mock репозитория
+    mock_user_repository.get_by_id.return_value = mock_user
+    
+    # Вызываем метод сервиса
+    result = await user_service.get_by_id(1)
+    
+    # Проверяем вызов репозитория
+    mock_user_repository.get_by_id.assert_called_once_with(mock_session, 1)
+    
+    # Проверяем результат
+    assert result is not None
+    assert result.id == 1
+    assert result.username == "testuser"
+
+Таким образом удалось изолировать сервисный слой и проверить его логику отдельно от остальных компонентов приложения.
+
+4. Тестирование API
+
+<img width="1688" height="274" alt="Снимок экрана 2025-12-16 в 04 59 03" src="https://github.com/user-attachments/assets/9dc143ac-087e-4f6d-94ca-7706522f6218" />
+
+На следующем этапе было протестировано API приложения. Для этого использовался TestClient, который позволяет отправлять запросы к эндпоинтам без запуска реального сервера.
+
+Были написаны тесты для:
+
+-создания пользователей
+-получения списка пользователей
+-обновления данных
+-удаления сущностей
+-работы эндпоинтов заказов и продукции
+
+Каждый тест проверял HTTP-статус ответа и корректность возвращаемых данных.
+
+
+5. Запуск тестов и анализ покрытия
+
+Тесты запускались следующими командами:
+
+-запуск всех тестов
+-запуск unit-тестов
+-запуск API-тестов
+-запуск тестов с покрытием кода
+
+Также был настроен файл pyproject.toml для конфигурации pytest, включая пути к тестам и дополнительные параметры запуска.
+
+Код toml файла:
+
+    [tool.pytest.ini_options]
+    testpaths = ["tests"]
+    asyncio_mode = "auto"
+    addopts = "--verbose --color=yes"
+    pythonpath = ["."]
+    
+    [tool.coverage.run]
+    source = ["app"]
+    omit = ["tests/*", "*/migrations/*"]
+    
+    [tool.coverage.report]
+    exclude_lines = [
+        "pragma: no cover",
+        "def __repr__",
+        "raise AssertionError",
+        "raise NotImplementedError",
+        "if __name__ == .__main__.:",
+    ]
+
 ## Ответы на вопросы
 
 ### 1. Почему используем отдельную тестовую БД?

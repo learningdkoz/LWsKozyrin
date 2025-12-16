@@ -100,7 +100,7 @@ async def demo_hashes(r: redis.Redis):
     print(f"Age после инкремента: {age}")
 
 
-async def demo_sorted_sets(r: redis.Asyncio):
+async def demo_sorted_sets(r: redis.Redis):
     """Демонстрация работы с упорядоченными множествами"""
     print("\n=== Работа с упорядоченными множествами ===")
 
